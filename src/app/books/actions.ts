@@ -128,6 +128,44 @@ export async function createNode(_prev: unknown, formData: FormData) {
   return { success: true };
 }
 
+export async function updateNode(id: string, content: string) {
+  if (!id?.trim()) {
+    return { error: "ノードIDが指定されていません" };
+  }
+  if (!content?.trim()) {
+    return { error: "内容を入力してください" };
+  }
+
+  const supabase = await createClient();
+
+  const { data: node, error: fetchError } = await supabase
+    .from("nodes")
+    .select("id, book_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !node) {
+    console.error("[updateNode] ノード取得失敗:", fetchError?.message ?? "not found");
+    return { error: "ノードが見つかりません" };
+  }
+
+  const { error: updateError } = await supabase
+    .from("nodes")
+    .update({ content: content.trim() })
+    .eq("id", id);
+
+  if (updateError) {
+    console.error("[updateNode] 更新失敗:", updateError.message);
+    return { error: "ノードの更新に失敗しました" };
+  }
+
+  if (node.book_id) {
+    revalidatePath("/books");
+    revalidatePath(`/books/${node.book_id}`);
+  }
+  return { success: true };
+}
+
 export async function updateNodePosition(nodeId: string, x: number, y: number) {
   const supabase = await createClient();
 

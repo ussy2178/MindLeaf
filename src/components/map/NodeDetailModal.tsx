@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MindMapNode } from "./MindMap";
 import {
   AlertDialog,
@@ -12,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { updateNode } from "@/app/books/actions";
 
 /** モーダル用のエッジ型（React Flow の Edge とも DB 由来の { id, source, target } とも互換） */
 export type NodeDetailModalEdge = {
@@ -39,7 +41,22 @@ export function NodeDetailModal({
   onDeleteEdge,
   onDeleteNode,
 }: NodeDetailModalProps) {
+  const router = useRouter();
   const [deleteNodeConfirmOpen, setDeleteNodeConfirmOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftContent, setDraftContent] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // ノード切り替え or モーダルを開いた時に編集状態を初期化
+  // （保存せず閉じた場合でも、次に開いた時はDBの最新値から開始）
+  useEffect(() => {
+    if (!isOpen || !node) return;
+    setIsEditing(false);
+    setDraftContent(node.content ?? "");
+    setSaveError(null);
+    setIsSaving(false);
+  }, [isOpen, node?.id]);
 
   if (!isOpen || !node) return null;
 
@@ -50,6 +67,34 @@ export function NodeDetailModal({
   const getOtherNode = (edge: NodeDetailModalEdge) => {
     const otherId = edge.source === node.id ? edge.target : edge.source;
     return nodes.find((n) => n.id === otherId);
+  };
+
+  const startEditing = () => {
+    setSaveError(null);
+    setIsEditing(true);
+    setDraftContent(node.content ?? "");
+  };
+
+  const handleSave = async () => {
+    const next = draftContent.trim();
+    if (!next) {
+      setSaveError("内容を入力してください");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    const result = await updateNode(node.id, next);
+    setIsSaving(false);
+
+    if (result && "error" in result) {
+      setSaveError(result.error ?? "更新に失敗しました");
+      return;
+    }
+
+    // サーバーの最新状態を取り直して、マインドマップにも反映
+    router.refresh();
+    setIsEditing(false);
   };
 
   return (
@@ -80,9 +125,66 @@ export function NodeDetailModal({
 
         <div className="p-4 overflow-y-auto space-y-4">
           <div>
-            <p className="text-stone-800 whitespace-pre-wrap text-sm mb-2">
-              {node.content}
-            </p>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-sm font-semibold text-stone-700">内容</p>
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-stone-500 hover:text-stone-700 hover:bg-stone-100"
+                  aria-label="編集"
+                  title="編集"
+                >
+                  <span aria-hidden>✎</span>
+                  <span className="text-xs font-medium">編集</span>
+                </button>
+              )}
+            </div>
+
+            {!isEditing ? (
+              <button
+                type="button"
+                onClick={startEditing}
+                className="w-full text-left rounded-xl border border-transparent hover:border-stone-200 hover:bg-stone-50 transition-colors"
+                title="クリックして編集"
+              >
+                <p className="text-stone-800 whitespace-pre-wrap text-sm p-2">
+                  {node.content}
+                </p>
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  value={draftContent}
+                  onChange={(e) => setDraftContent(e.target.value)}
+                  rows={6}
+                  className="w-full min-h-[140px] resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 text-[15px] leading-relaxed shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
+                />
+                {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setDraftContent(node.content ?? "");
+                      setSaveError(null);
+                    }}
+                    disabled={isSaving}
+                    className="px-3 py-2 rounded-xl border border-stone-200 bg-white text-stone-700 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium shadow-sm hover:bg-primary-600 disabled:opacity-50"
+                  >
+                    {isSaving ? "保存中..." : "保存"}
+                  </button>
+                </div>
+              </div>
+            )}
             {node.interpretation && (
               <div className="pt-2 border-t border-stone-100">
                 <p className="text-stone-600 whitespace-pre-wrap text-sm">

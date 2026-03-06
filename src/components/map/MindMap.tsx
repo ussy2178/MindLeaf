@@ -32,7 +32,7 @@ import { AbstractNode } from "./AbstractNode";
 import { DetailNode } from "./DetailNode";
 import { NodeDetailModal } from "./NodeDetailModal";
 import { FloatingStraightEdge } from "./FloatingStraightEdge";
-import { getLayoutedElements } from "./mindMapLayout";
+import { getLayoutedElements, getFullLayoutElements } from "./mindMapLayout";
 
 export type MindMapNode = {
   id: string;
@@ -124,6 +124,23 @@ function buildRfEdges(edges: MindMapEdge[]): Edge[] {
 
 const FIT_VIEW_DURATION = 300;
 
+/** Provider 内で fitView を ref に渡し、親の effect から呼べるようにする */
+function FitViewRefBridge({
+  fitViewRef,
+}: {
+  fitViewRef: React.MutableRefObject<((opts?: { padding?: number; duration?: number }) => void) | null>;
+}) {
+  const { fitView } = useReactFlow();
+  useEffect(() => {
+    fitViewRef.current = (opts) =>
+      fitView({ padding: opts?.padding ?? 0.2, duration: opts?.duration ?? FIT_VIEW_DURATION });
+    return () => {
+      fitViewRef.current = null;
+    };
+  }, [fitView, fitViewRef]);
+  return null;
+}
+
 type LayoutPanelProps = {
   rfNodes: Node[];
   rfEdges: Edge[];
@@ -143,8 +160,8 @@ function LayoutPanel({
 }: LayoutPanelProps) {
   const { fitView } = useReactFlow();
 
-  const handleLayout = useCallback(() => {
-    const layouted = getLayoutedElements(rfNodes, rfEdges);
+  const handleFullLayout = useCallback(() => {
+    const layouted = getFullLayoutElements(rfNodes, rfEdges);
     setNodes(layouted);
     onPersistPositions(layouted);
     requestAnimationFrame(() => {
@@ -152,15 +169,31 @@ function LayoutPanel({
     });
   }, [rfNodes, rfEdges, setNodes, onPersistPositions, fitView]);
 
+  const handleNudgeLayout = useCallback(() => {
+    const layouted = getLayoutedElements(rfNodes, rfEdges);
+    setNodes(layouted);
+    onPersistPositions(layouted);
+  }, [rfNodes, rfEdges, setNodes, onPersistPositions]);
+
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={handleLayout}
-        className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
-        title="ノードを階層に沿って整列します"
+        onClick={handleFullLayout}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
+        title="位置をリセットして、全体を階層に沿って一から綺麗に並べ直します"
       >
-        レイアウトを整える
+        <span aria-hidden>⊞</span>
+        全体を再配置
+      </button>
+      <button
+        type="button"
+        onClick={handleNudgeLayout}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50"
+        title="今の配置はそのままで、重なっている部分だけ最小限の動きで解消します"
+      >
+        <span aria-hidden>◎</span>
+        位置を微調整
       </button>
       <button
         type="button"
@@ -191,6 +224,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevNodeCountRef = useRef(nodes.length);
+  const fitViewRef = useRef<((opts?: { padding?: number; duration?: number }) => void) | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -232,7 +266,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
     });
   }, []);
 
-  // 新しいノード追加時にオートレイアウトで重なりを回避
+  // 新しいノード追加時に「位置を微調整」のみ実行し、重なりを解消。fitView で追加ノードが視覚的に追えるようにする
   useEffect(() => {
     if (nodes.length === 0 || nodes.length <= prevNodeCountRef.current) {
       prevNodeCountRef.current = nodes.length;
@@ -244,7 +278,29 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
     const layouted = getLayoutedElements(current, edgeList);
     setRfNodes(layouted);
     persistPositions(layouted);
+    requestAnimationFrame(() => {
+      fitViewRef.current?.({ padding: 0.2, duration: FIT_VIEW_DURATION });
+    });
   }, [nodes, edges, setRfNodes, persistPositions]);
+
+  // モーダルで編集したときなど、サーバーから渡る nodes の content/interpretation を React Flow の data に同期する（位置は維持）
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    setRfNodes((current) =>
+      current.map((rfNode) => {
+        const fromServer = nodes.find((n) => n.id === rfNode.id);
+        if (!fromServer) return rfNode;
+        return {
+          ...rfNode,
+          data: {
+            content: fromServer.content,
+            interpretation: fromServer.interpretation ?? null,
+            layer: fromServer.layer,
+          },
+        };
+      })
+    );
+  }, [nodes, setRfNodes]);
 
   const handleDeleteEdge = useCallback(
     (edgeId: string) => {
@@ -311,7 +367,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
     <ReactFlowProvider>
       <div
         ref={containerRef}
-        className={className}
+        className={`mindmap-fullscreen-container ${className}`.trim()}
         style={{
           height: isFullscreen ? "100vh" : 640,
           minHeight: 640,
@@ -337,6 +393,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
         defaultViewport={{ x: 0, y: 0, zoom: 0.9 }}
         proOptions={{ hideAttribution: true }}
       >
+        <FitViewRefBridge fitViewRef={fitViewRef} />
         <Controls />
         <Background gap={16} size={1} color="#a8a29e" />
         <Panel position="top-right">

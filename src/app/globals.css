@@ -7,3 +7,17 @@
     @apply bg-white text-stone-900;
   }
 }
+
+/* マインドマップフルスクリーン時: ブラウザデフォルトの黒背景を防ぎ、白／Stone系を維持 */
+.mindmap-fullscreen-container:fullscreen {
+  background-color: #fafaf9;
+}
+.mindmap-fullscreen-container:-webkit-full-screen {
+  background-color: #fafaf9;
+}
+.mindmap-fullscreen-container:-moz-full-screen {
+  background-color: #fafaf9;
+}
+.mindmap-fullscreen-container:-ms-fullscreen {
+  background-color: #fafaf9;
+}

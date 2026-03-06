@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useActionState } from "react";
+import { useRouter } from "next/navigation";
 import { createNode } from "@/app/books/actions";
 
 type FormState = { error?: string } | { success?: boolean } | null;
@@ -19,6 +20,7 @@ export function NodeAddForm({
   bookId: string;
   nodes?: ParentNodeOption[];
 }) {
+  const router = useRouter();
   const [layer, setLayer] = useState<1 | 2>(2);
   const [interpretationExpanded, setInterpretationExpanded] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
@@ -30,10 +32,11 @@ export function NodeAddForm({
   useEffect(() => {
     if (state && "success" in state && state.success) {
       setShowSuccessMessage(true);
+      router.refresh();
       const t = setTimeout(() => setShowSuccessMessage(false), 3000);
       return () => clearTimeout(t);
     }
-  }, [state]);
+  }, [state, router]);
 
   const isLayer1 = layer === 1;
 
@@ -47,7 +50,10 @@ export function NodeAddForm({
   );
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form
+      action={formAction}
+      className="rounded-2xl bg-white shadow-md border border-stone-200 p-6 sm:p-8 space-y-6"
+    >
       <input type="hidden" name="bookId" value={bookId} readOnly aria-hidden />
       {/* レイヤー1のときは type を thought で送信 */}
       {isLayer1 && (
@@ -74,9 +80,9 @@ export function NodeAddForm({
                 setLayer(1);
                 setInterpretationExpanded(false);
               }}
-              className="rounded border-stone-300 text-primary-600 focus:ring-primary-500"
+              className="rounded border-stone-300 text-primary-600 focus:ring-primary/30 focus:ring-4"
             />
-            <span>1: 抽象的なまとめ</span>
+            <span>1: エッセンス（本の核心）</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -85,9 +91,9 @@ export function NodeAddForm({
               value="2"
               checked={layer === 2}
               onChange={() => setLayer(2)}
-              className="rounded border-stone-300 text-primary-600 focus:ring-primary-500"
+              className="rounded border-stone-300 text-primary-600 focus:ring-primary/30 focus:ring-4"
             />
-            <span>2: 具体的な断片</span>
+            <span>2: 気づき・メモ</span>
           </label>
         </div>
       </div>
@@ -101,14 +107,20 @@ export function NodeAddForm({
           <select
             id="parentId"
             name="parentId"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
           >
-            {parentOptions.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.layer === 0 ? "Layer 0（本のタイトル）: " : "Layer 1（まとめ）: "}
-                {n.content.length > 40 ? `${n.content.slice(0, 40)}…` : n.content}
-              </option>
-            ))}
+            {parentOptions.map((n) => {
+              const text = n.content.length > 40 ? `${n.content.slice(0, 40)}…` : n.content;
+              const label =
+                n.layer === 0
+                  ? `本のタイトル：${text}`
+                  : `エッセンス（核心）：${text}`;
+              return (
+                <option key={n.id} value={n.id}>
+                  {label}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}
@@ -126,7 +138,7 @@ export function NodeAddForm({
                 name="type"
                 value="quote"
                 defaultChecked
-                className="rounded border-stone-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-stone-300 text-primary-600 focus:ring-primary/30 focus:ring-4"
               />
               <span>引用</span>
             </label>
@@ -135,7 +147,7 @@ export function NodeAddForm({
                 type="radio"
                 name="type"
                 value="thought"
-                className="rounded border-stone-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-stone-300 text-primary-600 focus:ring-primary/30 focus:ring-4"
               />
               <span>自分の解釈</span>
             </label>
@@ -152,9 +164,13 @@ export function NodeAddForm({
           id="content"
           name="content"
           required
-          rows={4}
-          placeholder={isLayer1 ? "抽象的なまとめを入力..." : "引用や解釈のテキストを入力..."}
-          className="w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
+          rows={6}
+          placeholder={
+            isLayer1
+              ? "この章で一番伝えたかったことは？"
+              : "今、心に残った言葉は何ですか？"
+          }
+          className="w-full min-h-[120px] resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 text-[15px] leading-relaxed shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
         />
       </div>
 
@@ -181,9 +197,9 @@ export function NodeAddForm({
                 <textarea
                   id="interpretation"
                   name="interpretation"
-                  rows={3}
-                  placeholder="この表現を読んでどう感じたか、自分なりの解釈をメモしてください"
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  rows={8}
+                  placeholder="読んで感じたこと・思ったことを自由に書いてください（任意）"
+                  className="w-full min-h-[200px] max-h-[480px] resize-y overflow-y-auto rounded-xl border border-stone-300 bg-white px-4 py-3 text-[15px] leading-relaxed shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
                 />
               </div>
             </div>
@@ -201,9 +217,9 @@ export function NodeAddForm({
             <textarea
               id="interpretation-layer2"
               name="interpretation"
-              rows={3}
-              placeholder="この表現を読んでどう感じたか、自分なりの解釈をメモしてください"
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              rows={8}
+              placeholder="読んで感じたこと・思ったことを自由に書いてください（任意）"
+              className="w-full min-h-[200px] max-h-[480px] resize-y overflow-y-auto rounded-xl border border-stone-300 bg-white px-4 py-3 text-[15px] leading-relaxed shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
             />
           </div>
         </div>
@@ -219,7 +235,7 @@ export function NodeAddForm({
       <button
         type="submit"
         disabled={!!isPending}
-        className="px-4 py-2.5 bg-primary text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 transition-opacity"
+        className="px-5 py-3 bg-primary text-white rounded-xl shadow-sm hover:bg-primary-600 disabled:opacity-50 transition-opacity"
       >
         {isPending ? "追加中..." : "追加する"}
       </button>
