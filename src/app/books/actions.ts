@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { BookInsert, NodeInsert } from "@/lib/types";
 
@@ -289,4 +290,70 @@ export async function deleteNode(nodeId: string) {
     revalidatePath(`/books/${node.book_id}`);
   }
   return { success: true };
+}
+
+export async function updateBook(
+  id: string,
+  data: { title: string; author: string | null; cover_image_url: string | null }
+) {
+  if (!id?.trim()) {
+    return { error: "本のIDが指定されていません" };
+  }
+  if (!data.title?.trim()) {
+    return { error: "タイトルを入力してください" };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("books")
+    .update({
+      title: data.title.trim(),
+      author: data.author?.trim() || null,
+      cover_image_url: data.cover_image_url?.trim() || null,
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[updateBook] 更新失敗:", error.message);
+    return { error: "本の更新に失敗しました" };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/books");
+  revalidatePath(`/books/${id}`);
+  return { success: true };
+}
+
+export async function deleteBook(id: string) {
+  if (!id?.trim()) {
+    return { error: "本のIDが指定されていません" };
+  }
+
+  const supabase = await createClient();
+
+  const { error: fetchError } = await supabase
+    .from("books")
+    .select("id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError) {
+    console.error("[deleteBook] 本の取得失敗:", fetchError?.message ?? "not found");
+    return { error: "本が見つかりません" };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("books")
+    .delete()
+    .eq("id", id);
+
+  if (deleteError) {
+    console.error("[deleteBook] 削除失敗:", deleteError.message);
+    return { error: "本の削除に失敗しました" };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/books");
+  redirect("/");
 }

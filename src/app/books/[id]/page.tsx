@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { NodeAddForm } from "@/components/books/NodeAddForm";
 import { CollapsibleNodeList } from "@/components/books/CollapsibleNodeList";
+import { BookSettingsDialog } from "@/components/books/BookSettingsDialog";
 import { MindMap } from "@/components/map/MindMap";
 
 type Props = { params: Promise<{ id: string }> };
@@ -77,8 +78,19 @@ export default async function BookDetailPage({ params }: Props) {
             書影
           </div>
         )}
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold">{book.title}</h1>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold">{book.title}</h1>
+            <BookSettingsDialog
+              book={{
+                id: book.id,
+                title: book.title,
+                author: book.author ?? null,
+                cover_image_url: book.cover_image_url ?? null,
+              }}
+              triggerLabel="編集"
+            />
+          </div>
           {book.author && (
             <p className="text-stone-500 text-sm mt-1">{book.author}</p>
           )}
