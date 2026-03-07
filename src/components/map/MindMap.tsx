@@ -100,6 +100,7 @@ function buildRfNodes(nodes: MindMapNode[]): Node[] {
         content: n.content,
         interpretation: n.interpretation ?? null,
         layer: n.layer,
+        kind: n.type,
       },
     };
   });
@@ -296,6 +297,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
             content: fromServer.content,
             interpretation: fromServer.interpretation ?? null,
             layer: fromServer.layer,
+            kind: fromServer.type,
           },
         };
       })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MindMapNode } from "@/components/map/MindMap";
 import type { NodeDetailModalEdge } from "@/components/map/NodeDetailModal";
@@ -12,9 +12,59 @@ type NodeListWithModalProps = {
   edges: NodeDetailModalEdge[];
 };
 
+/** 親子関係から「エッセンス＋その子」ブロックと「本直下のメモ」を構築 */
+function buildHierarchy(
+  nodes: MindMapNode[],
+  edges: NodeDetailModalEdge[]
+): { type: "essence-block"; essence: MindMapNode; children: MindMapNode[] }[] {
+  const root = nodes.find((n) => n.layer === 0);
+  const parentMap = new Map<string, string>();
+  for (const e of edges) {
+    parentMap.set(e.target, e.source);
+  }
+  const nodeOrder = new Map(nodes.map((n, i) => [n.id, i]));
+
+  const essences = nodes.filter((n) => n.layer === 1).sort((a, b) => (nodeOrder.get(a.id) ?? 0) - (nodeOrder.get(b.id) ?? 0));
+  const blocks: { type: "essence-block"; essence: MindMapNode; children: MindMapNode[] }[] = [];
+
+  for (const essence of essences) {
+    const children = nodes
+      .filter((n) => n.layer === 2 && parentMap.get(n.id) === essence.id)
+      .sort((a, b) => (nodeOrder.get(a.id) ?? 0) - (nodeOrder.get(b.id) ?? 0));
+    blocks.push({ type: "essence-block", essence, children });
+  }
+
+  return blocks;
+}
+
+/** 本（ルート）直下の気づき・メモ（親がルート or 親なし） */
+function getRootNotes(
+  nodes: MindMapNode[],
+  edges: NodeDetailModalEdge[]
+): MindMapNode[] {
+  const root = nodes.find((n) => n.layer === 0);
+  const rootId = root?.id ?? null;
+  const parentMap = new Map<string, string>();
+  for (const e of edges) {
+    parentMap.set(e.target, e.source);
+  }
+  const nodeOrder = new Map(nodes.map((n, i) => [n.id, i]));
+
+  return nodes
+    .filter((n) => {
+      if (n.layer !== 2) return false;
+      const parent = parentMap.get(n.id);
+      return parent === rootId || parent == null;
+    })
+    .sort((a, b) => (nodeOrder.get(a.id) ?? 0) - (nodeOrder.get(b.id) ?? 0));
+}
+
 export function NodeListWithModal({ nodes, edges }: NodeListWithModalProps) {
   const router = useRouter();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  const hierarchy = useMemo(() => buildHierarchy(nodes, edges), [nodes, edges]);
+  const rootNotes = useMemo(() => getRootNotes(nodes, edges), [nodes, edges]);
 
   const selectedNode =
     selectedNodeId != null
@@ -42,27 +92,76 @@ export function NodeListWithModal({ nodes, edges }: NodeListWithModalProps) {
     return true;
   };
 
+  const openNode = (id: string) => () => setSelectedNodeId(id);
+
   if (!nodes.length) {
     return <p className="text-stone-500 text-sm">まだノードがありません。</p>;
   }
 
   return (
     <>
-      <ul className="space-y-3">
-        {nodes.map((node) => (
-          <li key={node.id}>
+      <div className="space-y-6">
+        {hierarchy.map((block) => (
+          <div
+            key={block.essence.id}
+            className="rounded-xl border border-stone-200 bg-white overflow-hidden"
+          >
+            {/* エッセンス（親）: 太字・オレンジ左縦線・下アンダーライン */}
             <button
               type="button"
-              onClick={() => setSelectedNodeId(node.id)}
+              onClick={openNode(block.essence.id)}
+              className="w-full text-left p-4 pl-5 border-l-4 border-primary bg-section/50 hover:bg-section transition-colors"
+            >
+              <p className="font-bold text-stone-900 whitespace-pre-wrap">
+                {block.essence.content}
+              </p>
+              <div className="mt-2 h-px bg-stone-200" aria-hidden />
+            </button>
+
+            {/* 気づき・メモ（子）: インデント・L字コネクタ・小さい文字 */}
+            {block.children.length > 0 && (
+              <div className="border-t border-stone-100">
+                {block.children.map((child, idx) => (
+                  <div key={child.id} className="relative flex">
+                    <div
+                      className="absolute left-8 top-0 bottom-0 w-px bg-stone-200"
+                      aria-hidden
+                    />
+                    <div
+                      className="absolute left-8 top-4 h-px w-4 bg-stone-200"
+                      aria-hidden
+                    />
+                    <button
+                      type="button"
+                      onClick={openNode(child.id)}
+                      className="ml-8 flex-1 text-left py-3 pr-4 pl-2 hover:bg-stone-50/80 transition-colors min-w-0"
+                    >
+                      <p className="text-stone-600 text-sm whitespace-pre-wrap line-clamp-3">
+                        {child.content}
+                      </p>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* 本直下のメモ（インデントなし・通常表示） */}
+        {rootNotes.map((node) => (
+          <div key={node.id}>
+            <button
+              type="button"
+              onClick={openNode(node.id)}
               className="w-full text-left p-4 rounded-2xl border border-stone-200 bg-section hover:border-primary/30 hover:bg-white transition-colors"
             >
-              <p className="text-stone-800 whitespace-pre-wrap line-clamp-3">
+              <p className="text-stone-800 whitespace-pre-wrap line-clamp-3 text-sm">
                 {node.content}
               </p>
             </button>
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
 
       <NodeDetailModal
         isOpen={selectedNodeId !== null}

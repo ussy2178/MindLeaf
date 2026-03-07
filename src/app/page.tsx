@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { APP_VERSION } from "@/constants/version";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -9,7 +10,14 @@ export default async function HomePage() {
     .order("created_at", { ascending: false });
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white relative">
+      <p
+        className="fixed top-4 right-4 z-10 text-stone-400 text-xs select-none"
+        style={{ paddingRight: "env(safe-area-inset-right)", paddingTop: "env(safe-area-inset-top)" }}
+        aria-label={`バージョン ${APP_VERSION}`}
+      >
+        v{APP_VERSION}
+      </p>
       <div className="border-b border-stone-200 bg-section">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
           <div className="text-center">

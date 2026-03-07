@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Quote, MessageSquare } from "lucide-react";
 import type { MindMapNode } from "./MindMap";
 import {
   AlertDialog,
@@ -106,10 +107,10 @@ export function NodeDetailModal({
       aria-labelledby="node-detail-title"
     >
       <div
-        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl sm:max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-stone-200 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-stone-200 flex items-center justify-between shrink-0">
           <h2 id="node-detail-title" className="text-lg font-semibold text-stone-800">
             ノードの詳細
           </h2>
@@ -123,10 +124,14 @@ export function NodeDetailModal({
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto space-y-4">
-          <div>
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <p className="text-sm font-semibold text-stone-700">内容</p>
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+          {/* カード1: 心に留まった一節 */}
+          <div className="rounded-xl border border-stone-200 bg-white p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-stone-500">
+                <Quote className="size-4 shrink-0" aria-hidden />
+                本から得た言葉
+              </h3>
               {!isEditing && (
                 <button
                   type="button"
@@ -140,25 +145,24 @@ export function NodeDetailModal({
                 </button>
               )}
             </div>
-
             {!isEditing ? (
               <button
                 type="button"
                 onClick={startEditing}
-                className="w-full text-left rounded-xl border border-transparent hover:border-stone-200 hover:bg-stone-50 transition-colors"
+                className="w-full text-left rounded-lg border border-transparent hover:border-stone-200 hover:bg-stone-50/50 transition-colors -m-1 p-1"
                 title="クリックして編集"
               >
-                <p className="text-stone-800 whitespace-pre-wrap text-sm p-2">
+                <p className="text-stone-800 whitespace-pre-wrap text-lg leading-relaxed">
                   {node.content}
                 </p>
               </button>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <textarea
                   value={draftContent}
                   onChange={(e) => setDraftContent(e.target.value)}
-                  rows={6}
-                  className="w-full min-h-[140px] resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 text-[15px] leading-relaxed shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
+                  rows={8}
+                  className="w-full min-h-[200px] max-h-[50vh] resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg leading-relaxed text-stone-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
                 />
                 {saveError && <p className="text-sm text-red-600">{saveError}</p>}
                 <div className="flex justify-end gap-2">
@@ -185,15 +189,22 @@ export function NodeDetailModal({
                 </div>
               </div>
             )}
-            {node.interpretation && (
-              <div className="pt-2 border-t border-stone-100">
-                <p className="text-stone-600 whitespace-pre-wrap text-sm">
-                  {node.interpretation}
-                </p>
-              </div>
-            )}
           </div>
 
+          {/* カード2: 自分との対話（自分の考え） */}
+          <div className="rounded-xl border border-stone-200 bg-white p-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-stone-500 mb-4">
+              <MessageSquare className="size-4 shrink-0" aria-hidden />
+              自分との対話・考えたこと
+            </h3>
+            <p
+              className={`whitespace-pre-wrap text-lg leading-relaxed ${node.interpretation ? "text-stone-800" : "text-stone-400"}`}
+            >
+              {node.interpretation ?? "（まだ書いていません）"}
+            </p>
+          </div>
+
+          {/* 接続済みエッジ */}
           <div>
             <h3 className="text-sm font-semibold text-stone-700 mb-2">
               接続済みエッジ（{connectedEdges.length}件）
@@ -232,12 +243,13 @@ export function NodeDetailModal({
             )}
           </div>
 
+          {/* 削除ボタン: 一番下に控えめに */}
           {onDeleteNode && (
-            <div className="pt-4 border-t border-stone-200">
+            <div className="pt-6 border-t border-stone-200">
               <button
                 type="button"
                 onClick={() => setDeleteNodeConfirmOpen(true)}
-                className="flex items-center gap-2 w-full justify-center px-3 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 hover:border-red-300 transition-colors"
+                className="flex items-center gap-2 w-full justify-center px-3 py-2 rounded-xl border border-stone-200 text-stone-500 text-sm hover:bg-stone-50 hover:border-red-200 hover:text-red-600 transition-colors"
               >
                 <span aria-hidden>🗑</span>
                 このノードを削除する

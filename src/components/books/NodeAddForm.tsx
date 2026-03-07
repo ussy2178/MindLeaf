@@ -64,12 +64,9 @@ export function NodeAddForm({
         <input type="hidden" name="parentId" value={bookRootNode.id} readOnly aria-hidden />
       )}
 
-      {/* レイヤー選択（先頭で状態を決める） */}
-      <div>
-        <label className="block text-sm font-medium text-stone-700 mb-2">
-          レイヤー
-        </label>
-        <div className="flex gap-4">
+      {/* 階層選択（エッセンス / 気づき・メモ） */}
+      <div role="group" aria-label="階層">
+        <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
@@ -98,7 +95,7 @@ export function NodeAddForm({
         </div>
       </div>
 
-      {/* 接続先の親ノード（レイヤー2のみ表示） */}
+      {/* 接続先の親ノード（気づき・メモのみ表示） */}
       {!isLayer1 && parentOptions.length > 0 && (
         <div>
           <label htmlFor="parentId" className="block text-sm font-medium text-stone-700 mb-2">
