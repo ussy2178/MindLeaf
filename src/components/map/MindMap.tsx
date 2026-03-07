@@ -221,6 +221,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(initialNodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [edgeToDeleteId, setEdgeToDeleteId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -326,7 +327,15 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
   }, [edgeToDeleteId, handleDeleteEdge]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setFocusedNodeId((prev) => (prev === node.id ? null : node.id));
+  }, []);
+
+  const onNodeDoubleClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setFocusedNodeId(null);
   }, []);
 
   const selectedNode = useMemo(
@@ -354,6 +363,73 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
     [setRfEdges]
   );
 
+  const highlightedNodeIds = useMemo(() => {
+    if (!focusedNodeId) return null;
+    const focused = rfNodes.find((n) => n.id === focusedNodeId);
+    const layer = (focused?.data?.layer as number) ?? 2;
+
+    const set = new Set<string>([focusedNodeId]);
+
+    if (layer === 2) {
+      const parentId = rfEdges.find((e) => e.target === focusedNodeId)?.source ?? null;
+      const rootNode = rfNodes.find((n) => (n.data?.layer as number) === 0);
+      const rootId = rootNode?.id ?? null;
+
+      if (parentId) set.add(parentId);
+      if (rootId) set.add(rootId);
+
+      rfNodes.forEach((n) => {
+        const nLayer = n.data?.layer as number;
+        if (nLayer !== 2 || n.id === focusedNodeId) return;
+        const hasEdgeFromParent = rfEdges.some((e) => e.source === parentId && e.target === n.id);
+        if (hasEdgeFromParent) set.add(n.id);
+      });
+    } else {
+      rfEdges.forEach((e) => {
+        if (e.source === focusedNodeId || e.target === focusedNodeId) {
+          set.add(e.source);
+          set.add(e.target);
+        }
+      });
+    }
+    return set;
+  }, [focusedNodeId, rfNodes, rfEdges]);
+
+  const highlightedEdgeIds = useMemo(() => {
+    if (!highlightedNodeIds) return null;
+    return new Set(
+      rfEdges
+        .filter(
+          (e) => highlightedNodeIds.has(e.source) && highlightedNodeIds.has(e.target)
+        )
+        .map((e) => e.id)
+    );
+  }, [focusedNodeId, highlightedNodeIds, rfEdges]);
+
+  const nodesWithFocus = useMemo(() => {
+    if (!highlightedNodeIds) return rfNodes;
+    return rfNodes.map((n) => ({
+      ...n,
+      style: {
+        ...n.style,
+        opacity: highlightedNodeIds.has(n.id) ? 1 : 0.2,
+        transition: "opacity 300ms ease",
+      },
+    }));
+  }, [rfNodes, highlightedNodeIds]);
+
+  const edgesWithFocus = useMemo(() => {
+    if (!highlightedEdgeIds) return rfEdges;
+    return rfEdges.map((e) => ({
+      ...e,
+      style: {
+        ...e.style,
+        opacity: highlightedEdgeIds.has(e.id) ? 1 : 0.2,
+        transition: "opacity 300ms ease",
+      },
+    }));
+  }, [rfEdges, highlightedEdgeIds]);
+
   if (nodes.length === 0) {
     return (
       <div
@@ -377,12 +453,14 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
         }}
       >
         <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
+        nodes={nodesWithFocus}
+        edges={edgesWithFocus}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onPaneClick={onPaneClick}
         onEdgeDoubleClick={onEdgeDoubleClick}
         onConnect={onConnect}
         nodeTypes={NODE_TYPES}
