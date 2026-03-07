@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Quote, MessageSquare } from "lucide-react";
+import { Quote, MessageSquare, BookOpen } from "lucide-react";
 import type { MindMapNode } from "./MindMap";
 import {
   AlertDialog,
@@ -111,9 +112,20 @@ export function NodeDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 sm:p-5 border-b border-stone-200 flex items-center justify-between shrink-0">
-          <h2 id="node-detail-title" className="text-lg font-semibold text-stone-800">
-            ノードの詳細
-          </h2>
+          <div className="flex flex-col gap-1">
+            <h2 id="node-detail-title" className="text-lg font-semibold text-stone-800">
+              ノードの詳細
+            </h2>
+            {node.book_id && (
+              <Link
+                href={`/books/${node.book_id}`}
+                className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 hover:underline"
+              >
+                <BookOpen className="size-3.5" aria-hidden />
+                この本のページへ
+              </Link>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}

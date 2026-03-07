@@ -40,6 +40,12 @@ export default async function HomePage() {
               >
                 本一覧
               </Link>
+              <Link
+                href="/map/global"
+                className="inline-flex items-center justify-center rounded-xl border border-stone-200 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
+              >
+                全体マップを見る
+              </Link>
             </div>
           </div>
         </div>

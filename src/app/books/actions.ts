@@ -66,6 +66,7 @@ export async function createNode(_prev: unknown, formData: FormData) {
   const layerRaw = formData.get("layer");
   const layer = layerRaw === "1" ? 1 : 2;
   const parentIdRaw = (formData.get("parentId") as string)?.trim() || null;
+  const otherBookParentNodeIdRaw = (formData.get("otherBookParentNodeId") as string)?.trim() || null;
 
   // レイヤー1（抽象）の場合は常に thought。レイヤー2はフォームの種類を使用
   const typeRaw = formData.get("type") as string | null;
@@ -82,7 +83,6 @@ export async function createNode(_prev: unknown, formData: FormData) {
       .from("nodes")
       .select("position_x, position_y")
       .eq("id", parentIdRaw)
-      .eq("book_id", bookId.trim())
       .single();
     if (parentNode) {
       const px = Number(parentNode.position_x) || 0;
@@ -113,18 +113,31 @@ export async function createNode(_prev: unknown, formData: FormData) {
     return { error: "ノードの登録に失敗しました" };
   }
 
+  // エッジ1: 同一本内の親 ──> 新規ノード
   if (parentIdRaw && newNode?.id) {
     const { error: edgeError } = await supabase.from("edges").insert({
       source_node_id: parentIdRaw,
       target_node_id: newNode.id,
     });
     if (edgeError) {
-      console.error("[createNode] エッジ作成失敗（ノードは登録済み）:", edgeError.message);
+      console.error("[createNode] エッジ作成失敗（同一本）:", edgeError.message);
+    }
+  }
+
+  // エッジ2: 別の本のノード ──> 新規ノード（選択時のみ）
+  if (otherBookParentNodeIdRaw && newNode?.id && otherBookParentNodeIdRaw !== parentIdRaw) {
+    const { error: otherEdgeError } = await supabase.from("edges").insert({
+      source_node_id: otherBookParentNodeIdRaw,
+      target_node_id: newNode.id,
+    });
+    if (otherEdgeError) {
+      console.error("[createNode] エッジ作成失敗（別の本）:", otherEdgeError.message);
     }
   }
 
   revalidatePath("/books");
   revalidatePath(`/books/${bookId.trim()}`);
+  revalidatePath("/map/global");
   return { success: true };
 }
 
@@ -222,7 +235,7 @@ export async function createEdge(sourceId: string, targetId: string) {
 
   const { data: targetNode, error: targetError } = await supabase
     .from("nodes")
-    .select("id")
+    .select("id, book_id")
     .eq("id", targetId)
     .single();
 
@@ -245,9 +258,13 @@ export async function createEdge(sourceId: string, targetId: string) {
     return { error: "接続の保存に失敗しました" };
   }
 
+  revalidatePath("/map/global");
   if (sourceNode.book_id) {
     revalidatePath("/books");
     revalidatePath(`/books/${sourceNode.book_id}`);
+  }
+  if (targetNode.book_id && targetNode.book_id !== sourceNode.book_id) {
+    revalidatePath(`/books/${targetNode.book_id}`);
   }
   return { success: true, edgeId: newEdge.id };
 }
@@ -287,6 +304,7 @@ export async function deleteEdge(edgeId: string) {
     return { error: "接続の削除に失敗しました" };
   }
 
+  revalidatePath("/map/global");
   if (sourceNode?.book_id) {
     revalidatePath("/books");
     revalidatePath(`/books/${sourceNode.book_id}`);
@@ -394,4 +412,46 @@ export async function deleteBook(id: string) {
   revalidatePath("/");
   revalidatePath("/books");
   redirect("/");
+}
+
+/** 本をタイトルで検索（Layer 0 親選択の二段階検索用） */
+export async function searchBooks(query: string) {
+  const q = (query ?? "").trim();
+  if (!q) return { books: [] as { id: string; title: string }[] };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("books")
+    .select("id, title")
+    .ilike("title", `%${q}%`)
+    .order("title", { ascending: true })
+    .limit(20);
+  if (error) {
+    console.error("[searchBooks]", error.message);
+    return { error: "検索に失敗しました", books: [] as { id: string; title: string }[] };
+  }
+  return { books: (data ?? []).map((b) => ({ id: b.id, title: b.title ?? "" })) };
+}
+
+/** 指定した本に紐づくノード（Layer 0, 1, 2）を取得。親ノード選択リスト用 */
+export async function getNodesByBookId(bookId: string) {
+  if (!bookId?.trim()) return { nodes: [] as { id: string; layer: number; content: string }[] };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("nodes")
+    .select("id, layer, content")
+    .eq("book_id", bookId.trim())
+    .in("layer", [0, 1, 2])
+    .order("layer", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("[getNodesByBookId]", error.message);
+    return { error: "ノードの取得に失敗しました", nodes: [] as { id: string; layer: number; content: string }[] };
+  }
+  return {
+    nodes: (data ?? []).map((n) => ({
+      id: n.id,
+      layer: n.layer,
+      content: n.content ?? "",
+    })),
+  };
 }

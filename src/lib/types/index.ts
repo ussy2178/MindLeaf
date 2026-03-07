@@ -8,14 +8,18 @@ export interface Book {
   title: string;
   author: string | null;
   cover_image_url: string | null;
+  position_x: number;
+  position_y: number;
   created_at: string;
 }
 
-/** 本を登録するときの入力（id, created_at はDBで生成） */
-export type BookInsert = Omit<Book, "id" | "created_at"> & {
+/** 本を登録するときの入力（id, created_at はDBで生成。position_x/y は省略時DBデフォルト） */
+export type BookInsert = Omit<Book, "id" | "created_at" | "position_x" | "position_y"> & {
   title: string;
   author?: string | null;
   cover_image_url?: string | null;
+  position_x?: number;
+  position_y?: number;
 };
 
 // --- Nodes テーブル（思考の単位） ---

@@ -1,74 +1,64 @@
-読書と思考の可視化アプリ：設計図
+読書と思考の可視化アプリ：設計図 (v1.2.0)
+
 1. アプリの概要
-読書で得た印象的な表現や、自分なりの解釈を記録し、それらをマインドマップ形式で繋ぎ合わせることで、知識の繋がりを可視化するWebアプリ。
+読書で得た表現や解釈を記録し、本と本の境界を越えて知識をマインドマップ形式で繋ぎ合わせる、統合型ナレッジグラフ・アプリ。
 
 2. 技術スタック
 Frontend: Next.js (App Router), Tailwind CSS, shadcn/ui
-
 Backend/DB: Supabase
-
 Visualisation: React Flow
-
 Language: TypeScript
 
-3. データベース設計 (Supabase SQL)
-以下のSQLをSupabaseのSQL Editorで実行してテーブルを作成する。
+3. データベース設計 (Updated)
 
-SQL
--- 1. Booksテーブル
+### 1. Booksテーブル (本の基本情報とマップ上の位置)
+```sql
 create table books (
   id uuid default gen_random_uuid() primary key,
   title text not null,
   author text,
   cover_image_url text,
+  position_x float8 default 0, -- 追加：全体マップ上での本の中心座標
+  position_y float8 default 0, -- 追加：全体マップ上での本の中心座標
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-
--- 2. Nodesテーブル (思考の単位)
+2. Nodesテーブル (思考の単位)
+SQL
 create table nodes (
   id uuid default gen_random_uuid() primary key,
   book_id uuid references books(id) on delete cascade,
   type text check (type in ('book_root', 'quote', 'thought')),
-  layer integer default 2, -- 1: 抽象的なまとまり, 2: 具体的引用/解釈
+  layer integer default 2, -- 1: エッセンス, 2: 気づき・メモ
   content text not null,
-  position_x float default 0,
-  position_y float default 0,
+  position_x float8 default 0, -- マップ上のX座標
+  position_y float8 default 0, -- マップ上のY座標
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-
--- 3. Edgesテーブル (繋がり)
+3. Edgesテーブル (本を跨ぐ繋がり)
+SQL
 create table edges (
   id uuid default gen_random_uuid() primary key,
   source_node_id uuid references nodes(id) on delete cascade,
   target_node_id uuid references nodes(id) on delete cascade,
+  -- book_id は削除、または任意(nullable)とし、本を跨いだ接続を可能にする
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-4. 主要な機能要件
+主要な機能要件
+
 Phase 1: データ管理機能
-本を登録する: タイトル、著者、書影（任意）を入力。登録時、自動的にその本を代表する type: 'book_root' のノードを作成する。
 
-思考を記録する: 特定の本に紐づけて、「引用」か「自分の解釈」を選択してテキストを入力。
+本の登録と自動ルートノード作成
 
-レイヤー管理: 入力時に「抽象的なまとめ（Layer 1）」か「具体的な断片（Layer 2）」かを選択可能にする。
+思考の記録（エッセンス/気づき・メモ）
 
-Phase 2: マインドマップ表示 (React Flow)
-キャンバス表示: 登録されたノードをキャンバス上に配置。
+表記の最適化（Layer 1: 本の核心、Layer 2: 気づき・メモ）
 
-ドラッグ＆ドロップ: ノードの位置を自由に動かせ、その座標をDB（position_x, position_y）に保存する。
+Phase 2: 統合型マインドマップ (React Flow)
 
-エッジ接続: ノードとノードを線で繋ぎ、その関係性を edges テーブルに保存する。
+座標の永続化: ドラッグ終了時に position_x/y をDBに保存。次回表示時に位置を復元。
 
-フィルタリング: 本ごとの表示切り替えや、Layer 1のみの表示といった制御。
+グローバルビュー: すべての本とノードを一つのキャンバスに表示。
 
-5. 推奨ディレクトリ構成
-Plaintext
-/src
-  /app
-    /books        # 本の登録・一覧画面
-    /map          # マインドマップ表示画面
-  /components
-    /ui           # shadcn/uiコンポーネント
-    /map          # React Flow関連のカスタムノード等
-  /lib
-    /supabase     # Supabaseクライアント設定
-    /types        # TypeScriptの型定義
+クロスブック・コネクト: 異なる本に属するノード同士を手動で接続。
+
+フォーカス機能: シングルクリックで親・子・兄弟ノードおよびルート（本）をハイライト。

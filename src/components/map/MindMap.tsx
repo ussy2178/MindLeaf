@@ -42,6 +42,8 @@ export type MindMapNode = {
   interpretation: string | null;
   position_x: number;
   position_y: number;
+  /** グローバルビューで「この本へ」リンク用。省略時は同一本ページ想定 */
+  book_id?: string | null;
 };
 
 export type MindMapEdge = {
@@ -59,6 +61,11 @@ const NODE_TYPES = {
 const GRID_STEP_X = 260;
 const GRID_STEP_Y = 160;
 const ROOT_POSITION = { x: 350, y: 80 };
+/** 本ノード（Layer 0）の初期配置で、既存ノードとの最小間隔（px） */
+const ROOT_SPACING = 500;
+/** 本ノードの推定サイズ（境界計算・重なり防止用） */
+const ROOT_NODE_WIDTH = 220;
+const ROOT_NODE_HEIGHT = 60;
 
 function getNodeType(layer: number): "bookRoot" | "abstract" | "detail" {
   if (layer === 0) return "bookRoot";
@@ -66,11 +73,46 @@ function getNodeType(layer: number): "bookRoot" | "abstract" | "detail" {
   return "detail";
 }
 
+/** 座標が保存済みのノードから境界ボックスを計算（推定サイズ使用） */
+function getBoundingBox(nodes: MindMapNode[]): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let hasAny = false;
+  for (const n of nodes) {
+    if (n.position_x === 0 && n.position_y === 0) continue;
+    hasAny = true;
+    const w = n.layer === 0 ? ROOT_NODE_WIDTH : 240;
+    const h = n.layer === 0 ? ROOT_NODE_HEIGHT : 90;
+    minX = Math.min(minX, n.position_x);
+    minY = Math.min(minY, n.position_y);
+    maxX = Math.max(maxX, n.position_x + w);
+    maxY = Math.max(maxY, n.position_y + h);
+  }
+  if (!hasAny) return null;
+  return { minX, minY, maxX, maxY };
+}
+
 function buildRfNodes(nodes: MindMapNode[]): Node[] {
   const needsDefault = nodes.map((n, i) => ({
     index: i,
     useDefault: n.position_x === 0 && n.position_y === 0,
   }));
+
+  const bbox = getBoundingBox(nodes);
+  const defaultRootIndices = nodes
+    .map((n, i) => (needsDefault[i]?.useDefault && n.layer === 0 ? i : -1))
+    .filter((i) => i >= 0);
+
+  let rootPlaceX = ROOT_POSITION.x;
+  let rootPlaceY = ROOT_POSITION.y;
+  if (bbox && defaultRootIndices.length > 0) {
+    rootPlaceX = bbox.maxX + ROOT_SPACING;
+    rootPlaceY = bbox.minY;
+  }
+  let nextRootIndex = 0;
+
   let gridIndex = 0;
 
   return nodes.map((n, i) => {
@@ -79,8 +121,9 @@ function buildRfNodes(nodes: MindMapNode[]): Node[] {
     let y: number;
     if (useDefault) {
       if (n.layer === 0) {
-        x = ROOT_POSITION.x;
-        y = ROOT_POSITION.y;
+        x = rootPlaceX + nextRootIndex * ROOT_SPACING;
+        y = rootPlaceY;
+        nextRootIndex += 1;
       } else {
         const col = gridIndex % 4;
         const row = Math.floor(gridIndex / 4);
@@ -101,6 +144,7 @@ function buildRfNodes(nodes: MindMapNode[]): Node[] {
         interpretation: n.interpretation ?? null,
         layer: n.layer,
         kind: n.type,
+        book_id: n.book_id ?? null,
       },
     };
   });
@@ -108,19 +152,31 @@ function buildRfNodes(nodes: MindMapNode[]): Node[] {
 
 // stone-300 の落ち着いたグレー、太さ 1.5
 const EDGE_STYLE = { stroke: "#d6d3d1", strokeWidth: 1.5 };
+// 本を跨ぐエッジ：鮮やかなブルーで強調
+const CROSS_BOOK_EDGE_STYLE = { stroke: "#3b82f6", strokeWidth: 2 };
 
 const EDGE_TYPES = {
   floatingStraight: FloatingStraightEdge,
 };
 
-function buildRfEdges(edges: MindMapEdge[]): Edge[] {
-  return edges.map((e) => ({
-    id: e.id,
-    source: e.source_node_id,
-    target: e.target_node_id,
-    type: "floatingStraight",
-    style: EDGE_STYLE,
-  }));
+function buildRfEdges(edges: MindMapEdge[], nodes: MindMapNode[]): Edge[] {
+  const bookIdByNodeId = new Map<string, string | null>();
+  for (const n of nodes) {
+    bookIdByNodeId.set(n.id, n.book_id ?? null);
+  }
+  return edges.map((e) => {
+    const sourceBook = bookIdByNodeId.get(e.source_node_id) ?? null;
+    const targetBook = bookIdByNodeId.get(e.target_node_id) ?? null;
+    const isCrossBook =
+      sourceBook != null && targetBook != null && sourceBook !== targetBook;
+    return {
+      id: e.id,
+      source: e.source_node_id,
+      target: e.target_node_id,
+      type: "floatingStraight",
+      style: isCrossBook ? CROSS_BOOK_EDGE_STYLE : EDGE_STYLE,
+    };
+  });
 }
 
 const FIT_VIEW_DURATION = 300;
@@ -139,6 +195,45 @@ function FitViewRefBridge({
       fitViewRef.current = null;
     };
   }, [fitView, fitViewRef]);
+  return null;
+}
+
+/**
+ * 本の詳細ページ (/books/[id]) 専用オートフォーカス。
+ * ルート＋エッセンス（Layer 1）を nodes に指定し、そのバウンディングボックスで fitView するため
+ * ズームの中心が対象ノード群からずれず、大きな表示になる。
+ */
+function FocusBookBridge({ focusBookId }: { focusBookId: string | undefined }) {
+  const { getNodes, fitView } = useReactFlow();
+  const hasFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusBookId || hasFocusedRef.current) return;
+
+    const runFocus = () => {
+      const nodes = getNodes();
+      const bookNodes = nodes.filter(
+        (n) =>
+          (n.data?.book_id as string) === focusBookId &&
+          ((n.data?.layer as number) === 0 ||
+            (n.data?.layer as number) === 1 ||
+            n.type === "bookRoot" ||
+            n.type === "abstract")
+      );
+      if (bookNodes.length === 0) return;
+      hasFocusedRef.current = true;
+      const nodeIds = bookNodes.map((n) => ({ id: n.id }));
+      fitView({
+        nodes: nodeIds,
+        padding: 0.25,
+        maxZoom: 2.0,
+        duration: 400,
+      });
+    };
+
+    const t = setTimeout(runFocus, 150);
+    return () => clearTimeout(t);
+  }, [focusBookId, getNodes, fitView]);
   return null;
 }
 
@@ -211,12 +306,14 @@ function LayoutPanel({
 type MindMapProps = {
   nodes: MindMapNode[];
   edges: MindMapEdge[];
+  /** 指定時はその本のルートを画面中央に表示（個別ページで全体マップ表示時用） */
+  focusBookId?: string;
   className?: string;
 };
 
-export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
+export function MindMap({ nodes, edges, focusBookId, className = "" }: MindMapProps) {
   const initialNodes = useMemo(() => buildRfNodes(nodes), [nodes]);
-  const initialEdges = useMemo(() => buildRfEdges(edges), [edges]);
+  const initialEdges = useMemo(() => buildRfEdges(edges, nodes), [edges, nodes]);
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(initialNodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -227,6 +324,8 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const prevNodeCountRef = useRef(nodes.length);
   const fitViewRef = useRef<((opts?: { padding?: number; duration?: number }) => void) | null>(null);
+  /** ユーザーが手動でドラッグした場合のみ true。プログラム的な位置変更では保存しない */
+  const userDraggingRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -276,7 +375,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
     }
     prevNodeCountRef.current = nodes.length;
     const current = buildRfNodes(nodes);
-    const edgeList = buildRfEdges(edges);
+    const edgeList = buildRfEdges(edges, nodes);
     const layouted = getLayoutedElements(current, edgeList);
     setRfNodes(layouted);
     persistPositions(layouted);
@@ -299,6 +398,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
             interpretation: fromServer.interpretation ?? null,
             layer: fromServer.layer,
             kind: fromServer.type,
+            book_id: fromServer.book_id ?? (rfNode.data?.book_id as string | null) ?? null,
           },
         };
       })
@@ -343,8 +443,14 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
     [nodes, selectedNodeId]
   );
 
+  const onNodeDragStart = useCallback(() => {
+    userDraggingRef.current = true;
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      if (!userDraggingRef.current) return;
+      userDraggingRef.current = false;
       updateNodePosition(node.id, node.position.x, node.position.y).catch((err) => {
         console.error("[MindMap] 位置保存エラー:", err);
       });
@@ -457,6 +563,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
         edges={edgesWithFocus}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
@@ -466,7 +573,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         defaultEdgeOptions={{ type: "floatingStraight", style: EDGE_STYLE }}
-        fitView
+        fitView={focusBookId == null}
         fitViewOptions={{ padding: 0.2, duration: FIT_VIEW_DURATION }}
         minZoom={0.2}
         maxZoom={1.5}
@@ -474,6 +581,7 @@ export function MindMap({ nodes, edges, className = "" }: MindMapProps) {
         proOptions={{ hideAttribution: true }}
       >
         <FitViewRefBridge fitViewRef={fitViewRef} />
+        {focusBookId != null && <FocusBookBridge focusBookId={focusBookId} />}
         <Controls />
         <Background gap={16} size={1} color="#a8a29e" />
         <Panel position="top-right">

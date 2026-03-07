@@ -22,25 +22,34 @@ export default async function BookDetailPage({ params }: Props) {
     notFound();
   }
 
-  const { data: nodes } = await supabase
+  // この本のノード（追加フォーム・ノードリスト用）
+  const { data: bookNodes } = await supabase
     .from("nodes")
-    .select("id, type, layer, content, interpretation, position_x, position_y, created_at")
+    .select("id, book_id, type, layer, content, interpretation, position_x, position_y, created_at")
     .eq("book_id", id)
     .order("created_at", { ascending: true });
 
-  const nodeIds = nodes?.map((n) => n.id) ?? [];
-  let edges: { id: string; source_node_id: string; target_node_id: string }[] = [];
-  if (nodeIds.length > 0) {
+  // 全体マップ用：全ノード・全エッジを取得
+  const { data: allNodes } = await supabase
+    .from("nodes")
+    .select("id, book_id, type, layer, content, interpretation, position_x, position_y, created_at")
+    .order("created_at", { ascending: true });
+
+  const allNodeIds = allNodes?.map((n) => n.id) ?? [];
+  let allEdges: { id: string; source_node_id: string; target_node_id: string }[] = [];
+  if (allNodeIds.length > 0) {
     const { data: edgesData } = await supabase
       .from("edges")
-      .select("id, source_node_id, target_node_id")
-      .in("source_node_id", nodeIds);
-    edges =
-      edgesData?.filter((e) => nodeIds.includes(e.target_node_id)) ?? [];
+      .select("id, source_node_id, target_node_id");
+    allEdges =
+      edgesData?.filter(
+        (e) =>
+          allNodeIds.includes(e.source_node_id) && allNodeIds.includes(e.target_node_id)
+      ) ?? [];
   }
 
   const mindMapNodes =
-    nodes?.map((n) => ({
+    allNodes?.map((n) => ({
       id: n.id,
       type: n.type,
       layer: n.layer,
@@ -48,13 +57,17 @@ export default async function BookDetailPage({ params }: Props) {
       interpretation: n.interpretation ?? null,
       position_x: n.position_x ?? 0,
       position_y: n.position_y ?? 0,
+      book_id: n.book_id ?? null,
     })) ?? [];
 
-  const edgesForModal = edges.map((e) => ({
-    id: e.id,
-    source: e.source_node_id,
-    target: e.target_node_id,
-  }));
+  const bookNodeIds = bookNodes?.map((n) => n.id) ?? [];
+  const edgesForModal = allEdges
+    .filter((e) => bookNodeIds.includes(e.source_node_id) || bookNodeIds.includes(e.target_node_id))
+    .map((e) => ({
+      id: e.id,
+      source: e.source_node_id,
+      target: e.target_node_id,
+    }));
 
   return (
     <main className="min-h-screen px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto bg-white">
@@ -103,21 +116,28 @@ export default async function BookDetailPage({ params }: Props) {
         </h2>
         <NodeAddForm
           bookId={id}
-          nodes={nodes?.map((n) => ({ id: n.id, layer: n.layer, content: n.content })) ?? []}
+          nodes={bookNodes?.map((n) => ({ id: n.id, layer: n.layer, content: n.content })) ?? []}
         />
       </section>
 
-      <CollapsibleNodeList nodes={mindMapNodes} edges={edgesForModal} />
+      <CollapsibleNodeList
+        nodes={mindMapNodes.filter((n) => n.book_id === id)}
+        edges={edgesForModal}
+      />
 
       <section className="rounded-2xl border border-stone-200 bg-section p-6">
         <h2 className="text-sm font-semibold text-stone-600 mb-3">
           マインドマップ
         </h2>
         <div
-          key={`mindmap-${mindMapNodes.length}-${edges.length}`}
+          key={`mindmap-${mindMapNodes.length}-${allEdges.length}`}
           className="rounded-2xl border border-stone-200 overflow-hidden bg-white"
         >
-          <MindMap nodes={mindMapNodes} edges={edges} />
+          <MindMap
+            nodes={mindMapNodes}
+            edges={allEdges}
+            focusBookId={id}
+          />
         </div>
       </section>
     </main>
