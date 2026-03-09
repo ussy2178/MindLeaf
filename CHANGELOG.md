@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.5.8]
+
+- ソートメニューの配置を端へ移動し、デザインをよりミニマルに改善：ボーダーレス・小さめテキスト（text-xs text-stone-400）で控えめな外観に、トップ画面は absolute right-0 で右端固定、一覧画面は ml-auto で右寄せを維持
+
+## [1.5.7]
+
+- トップ画面へのソート機能追加：HomeContentGrid クライアントコンポーネントを導入し、トップページでも Current Status / Recently Added / Recently Finished / Highest Rated の4種ソートを選択可能に
+- ソートラベルの直感的な表現への改善：Priority→Current Status、Newest→Recently Added、Seen Date→Recently Finished、Rating→Highest Rated に変更
+- ソートロジックの共通化：sortItems / SortType / SORT_OPTIONS を src/lib/sort.ts に、SortSelect を共通コンポーネントとして抽出し、一覧ページ・トップページで再利用
+
+## [1.5.6]
+
+- コンテンツの並べ替え機能の実装（Status, Date, Rating）：Priority（Now>Unseen>Seen）、Newest（登録日降順）、Seen Date（視聴/読了日降順）、Rating（星数降順）の4種ソートをフィルタバー横のセレクトで切替可能に
+
+## [1.5.5]
+
+- ステータスバッジへのアイコン導入と視認性の向上：Unseen=Circle（グレー）、Now=Play（ブルー）、Seen=CheckCircle2（グリーン）を各バッジのテキスト左に配置、Unseen を淡いグレー（bg-slate-50 text-slate-400）で未着手感を表現、Seen を bg-green-100 text-green-700 で達成感のある配色に調整
+
+## [1.5.4]
+
+- バッジのデフォルト配色を淡いトーンへ修正（視覚的重みの軽減）：Badge コンポーネントの default variant を `bg-stone-100 text-stone-700` に変更、全バッジを `bg-[色]-100 text-[色]-900 border-none hover:bg-[色]-200` パターンに統一、`text-white` / 黒背景を完全排除
+
+## [1.5.3]
+
+- バッジ配色の軽量化：黒背景＋白文字を廃止し、淡い背景色＋濃い文字色のソフトなパステルトーンに統一（Book=ベージュ系, Movie=パープル系, Anime=スカイ系, Drama=ローズ系 / Unseen=ストーン, Now=ブルー, Seen=エメラルド）
+- カテゴリのインライン編集機能追加：Content Type バッジをクリックすると Popover が開き、その場で種別を切替可能に（updateContentType サーバーアクション + Optimistic UI）
+- Off Map 表記のアイコン化：テキスト「(Off map)」を削除し、MapPinOff アイコン（Lucide）で控えめに表示
+
+## [1.5.2]
+
+- 一覧画面のバッジ配色不整合の修正：ステータスバッジをトップページと統一（Unseen=slate, Now=blue, Seen=green の塗り背景＋白文字）、Badge コンポーネントのサイズ・余白を全画面で統一
+- 入力フォームのラベル英語化の徹底：ContentAddForm・ContentSettingsDialog の種別（Book/Movie/Anime/Drama）、ステータス（Unseen/Now/Seen）、評価（Unrated）の表示ラベルを英語に変更
+
+## [1.5.1]
+
+- バッジの英語化とデザイン刷新：種別（Book/Movie/Anime/Drama）・ステータス（Unseen/Now/Seen）を英語表記に変更、shadcn/ui Badge コンポーネントで深みのある落ち着いたトーンに統一
+- インラインステータス編集機能の追加：ステータスバッジをクリックすると Popover が開き、その場でステータスを切替可能に（updateContentStatus サーバーアクション + Optimistic UI）
+- Unseen ステータスのマップ自動非表示化：新規登録時 status=Unseen なら is_on_map をデフォルト false に設定、フォームでステータス変更時に連動して切替
+
+## [1.5.0]
+
+- コンテンツ管理機能の統合（Book, Movie, Anime, Drama対応）：`books` テーブルを `contents` テーブルへ移行、`book_id` を `content_id` へリネーム
+- ステータス・評価・実施日の記録機能：content_type, status (Unseen/Now/Seen), seen_on, rating (★★〜★★★★+) カラムを追加
+- マインドマップ表示制御の実装：`is_on_map` カラムにより、コンテンツ単位でマップへの表示/非表示を切替可能に
+- 作品全体の感想（overall_review）エリアの追加：詳細ページにてマインドマップとは独立した Textarea で感想を記録・保存
+- コンテンツ一覧画面に種別フィルタ（本/映画/アニメ/ドラマ）・ステータスバッジ・評価（★）バッジを追加
+- ルーティングを `/books/*` から `/contents/*` へ移行、グローバルマップでも `is_on_map` フィルタを適用
+- 登録・編集フォームに種別/ステータス/視聴日/評価/マップ表示のフィールドを追加
+
 ## [1.4.8]
 
 - 詳細ページにおけるオートフォーカスの表示倍率をさらに拡大（視認性の再調整）：padding 0.25・maxZoom 2.0 でノードに寄った大きな表示に

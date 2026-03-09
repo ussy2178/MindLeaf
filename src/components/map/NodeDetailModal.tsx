@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { updateNode } from "@/app/books/actions";
+import { updateNode } from "@/app/contents/actions";
 
 /** モーダル用のエッジ型（React Flow の Edge とも DB 由来の { id, source, target } とも互換） */
 export type NodeDetailModalEdge = {
@@ -116,13 +116,13 @@ export function NodeDetailModal({
             <h2 id="node-detail-title" className="text-lg font-semibold text-stone-800">
               ノードの詳細
             </h2>
-            {node.book_id && (
+            {node.content_id && (
               <Link
-                href={`/books/${node.book_id}`}
+                href={`/contents/${node.content_id}`}
                 className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 hover:underline"
               >
                 <BookOpen className="size-3.5" aria-hidden />
-                この本のページへ
+                このコンテンツのページへ
               </Link>
             )}
           </div>

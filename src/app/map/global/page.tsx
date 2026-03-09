@@ -5,12 +5,25 @@ import { MindMap } from "@/components/map/MindMap";
 export default async function GlobalMapPage() {
   const supabase = await createClient();
 
+  // is_on_map が true かつ Unseen でないコンテンツのみ表示
+  // (Unseen で手動で is_on_map=true にした場合のみ表示される)
+  const { data: mapContents } = await supabase
+    .from("contents")
+    .select("id, status, is_on_map")
+    .eq("is_on_map", true);
+
+  const mapContentIds = new Set((mapContents ?? []).map((c) => c.id));
+
   const { data: nodes } = await supabase
     .from("nodes")
-    .select("id, book_id, type, layer, content, interpretation, position_x, position_y, created_at")
+    .select("id, content_id, type, layer, content, interpretation, position_x, position_y, created_at")
     .order("created_at", { ascending: true });
 
-  const nodeIds = nodes?.map((n) => n.id) ?? [];
+  const filteredNodes = (nodes ?? []).filter(
+    (n) => n.content_id && mapContentIds.has(n.content_id)
+  );
+
+  const nodeIds = filteredNodes.map((n) => n.id);
   let edges: { id: string; source_node_id: string; target_node_id: string }[] = [];
   if (nodeIds.length > 0) {
     const { data: edgesData } = await supabase
@@ -23,17 +36,16 @@ export default async function GlobalMapPage() {
       ) ?? [];
   }
 
-  const mindMapNodes =
-    nodes?.map((n) => ({
-      id: n.id,
-      type: n.type,
-      layer: n.layer,
-      content: n.content,
-      interpretation: n.interpretation ?? null,
-      position_x: n.position_x ?? 0,
-      position_y: n.position_y ?? 0,
-      book_id: n.book_id ?? null,
-    })) ?? [];
+  const mindMapNodes = filteredNodes.map((n) => ({
+    id: n.id,
+    type: n.type,
+    layer: n.layer,
+    content: n.content,
+    interpretation: n.interpretation ?? null,
+    position_x: n.position_x ?? 0,
+    position_y: n.position_y ?? 0,
+    content_id: n.content_id ?? null,
+  }));
 
   const edgesForMindMap = edges.map((e) => ({
     id: e.id,
@@ -55,10 +67,10 @@ export default async function GlobalMapPage() {
             全体マップ（グローバルビュー）
           </h1>
           <Link
-            href="/books"
+            href="/contents"
             className="text-stone-500 hover:text-stone-700 text-sm"
           >
-            本一覧
+            コンテンツ一覧
           </Link>
         </div>
         <div className="rounded-2xl border border-stone-200 overflow-hidden bg-white min-h-[640px]">

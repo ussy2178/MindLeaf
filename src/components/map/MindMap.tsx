@@ -16,7 +16,7 @@ import ReactFlow, {
   type Connection,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { updateNodePosition, createEdge, deleteEdge, deleteNode } from "@/app/books/actions";
+import { updateNodePosition, createEdge, deleteEdge, deleteNode } from "@/app/contents/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,8 +42,8 @@ export type MindMapNode = {
   interpretation: string | null;
   position_x: number;
   position_y: number;
-  /** グローバルビューで「この本へ」リンク用。省略時は同一本ページ想定 */
-  book_id?: string | null;
+  /** グローバルビューで「このコンテンツへ」リンク用。省略時は同一コンテンツページ想定 */
+  content_id?: string | null;
 };
 
 export type MindMapEdge = {
@@ -144,7 +144,7 @@ function buildRfNodes(nodes: MindMapNode[]): Node[] {
         interpretation: n.interpretation ?? null,
         layer: n.layer,
         kind: n.type,
-        book_id: n.book_id ?? null,
+        content_id: n.content_id ?? null,
       },
     };
   });
@@ -160,15 +160,15 @@ const EDGE_TYPES = {
 };
 
 function buildRfEdges(edges: MindMapEdge[], nodes: MindMapNode[]): Edge[] {
-  const bookIdByNodeId = new Map<string, string | null>();
+  const contentIdByNodeId = new Map<string, string | null>();
   for (const n of nodes) {
-    bookIdByNodeId.set(n.id, n.book_id ?? null);
+    contentIdByNodeId.set(n.id, n.content_id ?? null);
   }
   return edges.map((e) => {
-    const sourceBook = bookIdByNodeId.get(e.source_node_id) ?? null;
-    const targetBook = bookIdByNodeId.get(e.target_node_id) ?? null;
+    const sourceContent = contentIdByNodeId.get(e.source_node_id) ?? null;
+    const targetContent = contentIdByNodeId.get(e.target_node_id) ?? null;
     const isCrossBook =
-      sourceBook != null && targetBook != null && sourceBook !== targetBook;
+      sourceContent != null && targetContent != null && sourceContent !== targetContent;
     return {
       id: e.id,
       source: e.source_node_id,
@@ -199,30 +199,29 @@ function FitViewRefBridge({
 }
 
 /**
- * 本の詳細ページ (/books/[id]) 専用オートフォーカス。
- * ルート＋エッセンス（Layer 1）を nodes に指定し、そのバウンディングボックスで fitView するため
- * ズームの中心が対象ノード群からずれず、大きな表示になる。
+ * コンテンツ詳細ページ (/contents/[id]) 専用オートフォーカス。
+ * ルート＋エッセンス（Layer 1）を nodes に指定し、そのバウンディングボックスで fitView する。
  */
-function FocusBookBridge({ focusBookId }: { focusBookId: string | undefined }) {
+function FocusContentBridge({ focusContentId }: { focusContentId: string | undefined }) {
   const { getNodes, fitView } = useReactFlow();
   const hasFocusedRef = useRef(false);
 
   useEffect(() => {
-    if (!focusBookId || hasFocusedRef.current) return;
+    if (!focusContentId || hasFocusedRef.current) return;
 
     const runFocus = () => {
       const nodes = getNodes();
-      const bookNodes = nodes.filter(
+      const contentNodes = nodes.filter(
         (n) =>
-          (n.data?.book_id as string) === focusBookId &&
+          (n.data?.content_id as string) === focusContentId &&
           ((n.data?.layer as number) === 0 ||
             (n.data?.layer as number) === 1 ||
             n.type === "bookRoot" ||
             n.type === "abstract")
       );
-      if (bookNodes.length === 0) return;
+      if (contentNodes.length === 0) return;
       hasFocusedRef.current = true;
-      const nodeIds = bookNodes.map((n) => ({ id: n.id }));
+      const nodeIds = contentNodes.map((n) => ({ id: n.id }));
       fitView({
         nodes: nodeIds,
         padding: 0.25,
@@ -233,7 +232,7 @@ function FocusBookBridge({ focusBookId }: { focusBookId: string | undefined }) {
 
     const t = setTimeout(runFocus, 150);
     return () => clearTimeout(t);
-  }, [focusBookId, getNodes, fitView]);
+  }, [focusContentId, getNodes, fitView]);
   return null;
 }
 
@@ -306,12 +305,12 @@ function LayoutPanel({
 type MindMapProps = {
   nodes: MindMapNode[];
   edges: MindMapEdge[];
-  /** 指定時はその本のルートを画面中央に表示（個別ページで全体マップ表示時用） */
-  focusBookId?: string;
+  /** 指定時はそのコンテンツのルートを画面中央に表示（個別ページで全体マップ表示時用） */
+  focusContentId?: string;
   className?: string;
 };
 
-export function MindMap({ nodes, edges, focusBookId, className = "" }: MindMapProps) {
+export function MindMap({ nodes, edges, focusContentId, className = "" }: MindMapProps) {
   const initialNodes = useMemo(() => buildRfNodes(nodes), [nodes]);
   const initialEdges = useMemo(() => buildRfEdges(edges, nodes), [edges, nodes]);
 
@@ -398,7 +397,7 @@ export function MindMap({ nodes, edges, focusBookId, className = "" }: MindMapPr
             interpretation: fromServer.interpretation ?? null,
             layer: fromServer.layer,
             kind: fromServer.type,
-            book_id: fromServer.book_id ?? (rfNode.data?.book_id as string | null) ?? null,
+            content_id: fromServer.content_id ?? (rfNode.data?.content_id as string | null) ?? null,
           },
         };
       })
@@ -573,7 +572,7 @@ export function MindMap({ nodes, edges, focusBookId, className = "" }: MindMapPr
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         defaultEdgeOptions={{ type: "floatingStraight", style: EDGE_STYLE }}
-        fitView={focusBookId == null}
+        fitView={focusContentId == null}
         fitViewOptions={{ padding: 0.2, duration: FIT_VIEW_DURATION }}
         minZoom={0.2}
         maxZoom={1.5}
@@ -581,7 +580,7 @@ export function MindMap({ nodes, edges, focusBookId, className = "" }: MindMapPr
         proOptions={{ hideAttribution: true }}
       >
         <FitViewRefBridge fitViewRef={fitViewRef} />
-        {focusBookId != null && <FocusBookBridge focusBookId={focusBookId} />}
+        {focusContentId != null && <FocusContentBridge focusContentId={focusContentId} />}
         <Controls />
         <Background gap={16} size={1} color="#a8a29e" />
         <Panel position="top-right">

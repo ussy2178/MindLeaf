@@ -1,8 +1,11 @@
 /**
- * Supabase / DB スキーマに基づく型定義（design_doc 準拠）
- * position_x, position_y は nodes / books のマップ座標用
+ * Supabase / DB スキーマに基づく型定義（design_doc v1.5.0 準拠）
  */
 export type {
+  Content,
+  ContentInsert,
+  ContentType,
+  ContentStatus,
   Book,
   BookInsert,
   Node,

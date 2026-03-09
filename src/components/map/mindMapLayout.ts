@@ -297,7 +297,7 @@ const CLUSTER_PLACEMENT_TICKS = 100;
 export function getFullLayoutElements(nodes: Node[], edges: Edge[]): Node[] {
   if (nodes.length === 0) return nodes;
 
-  const bookIdKey = (n: Node) => (n.data?.book_id as string) ?? "";
+  const bookIdKey = (n: Node) => (n.data?.content_id as string) ?? (n.data?.book_id as string) ?? "";
 
   const byBook = new Map<string, Node[]>();
   for (const node of nodes) {
