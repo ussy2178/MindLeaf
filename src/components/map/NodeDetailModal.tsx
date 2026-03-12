@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Quote, MessageSquare, BookOpen } from "lucide-react";
@@ -16,6 +17,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { updateNode } from "@/app/contents/actions";
+import { stripHtml, isEditorContentEmpty } from "@/lib/html";
+
+const RichEditor = dynamic(
+  () => import("@/components/ui/RichEditor").then((mod) => mod.RichEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[150px] w-full animate-pulse rounded-md bg-slate-100" aria-hidden />
+    ),
+  }
+);
+
+function normalizeNodeContentHtml(raw: string): string {
+  if (!raw || !raw.trim()) return "";
+  const t = raw.trim();
+  if (t.startsWith("<") && t.endsWith(">")) return raw;
+  return "<p>" + t.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>") + "</p>";
+}
 
 /** モーダル用のエッジ型（React Flow の Edge とも DB 由来の { id, source, target } とも互換） */
 export type NodeDetailModalEdge = {
@@ -55,7 +74,7 @@ export function NodeDetailModal({
   useEffect(() => {
     if (!isOpen || !node) return;
     setIsEditing(false);
-    setDraftContent(node.content ?? "");
+    setDraftContent(normalizeNodeContentHtml(node.content ?? ""));
     setSaveError(null);
     setIsSaving(false);
   }, [isOpen, node?.id]);
@@ -74,19 +93,18 @@ export function NodeDetailModal({
   const startEditing = () => {
     setSaveError(null);
     setIsEditing(true);
-    setDraftContent(node.content ?? "");
+    setDraftContent(normalizeNodeContentHtml(node.content ?? ""));
   };
 
   const handleSave = async () => {
-    const next = draftContent.trim();
-    if (!next) {
+    if (isEditorContentEmpty(draftContent)) {
       setSaveError("内容を入力してください");
       return;
     }
 
     setIsSaving(true);
     setSaveError(null);
-    const result = await updateNode(node.id, next);
+    const result = await updateNode(node.id, draftContent.trim());
     setIsSaving(false);
 
     if (result && "error" in result) {
@@ -164,17 +182,18 @@ export function NodeDetailModal({
                 className="w-full text-left rounded-lg border border-transparent hover:border-stone-200 hover:bg-stone-50/50 transition-colors -m-1 p-1"
                 title="クリックして編集"
               >
-                <p className="text-stone-800 whitespace-pre-wrap text-lg leading-relaxed">
-                  {node.content}
-                </p>
+                <div
+                  className="rich-display text-stone-800 text-lg leading-relaxed [&_p]:my-1 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-2 [&_blockquote]:border-stone-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_a]:text-primary-600 [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: node.content || "<p></p>" }}
+                />
               </button>
             ) : (
               <div className="space-y-3">
-                <textarea
+                <RichEditor
                   value={draftContent}
-                  onChange={(e) => setDraftContent(e.target.value)}
-                  rows={8}
-                  className="w-full min-h-[200px] max-h-[50vh] resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg leading-relaxed text-stone-800 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-shadow"
+                  onChange={setDraftContent}
+                  minHeight="200px"
+                  className="max-h-[50vh] overflow-y-auto"
                 />
                 {saveError && <p className="text-sm text-red-600">{saveError}</p>}
                 <div className="flex justify-end gap-2">
@@ -182,7 +201,7 @@ export function NodeDetailModal({
                     type="button"
                     onClick={() => {
                       setIsEditing(false);
-                      setDraftContent(node.content ?? "");
+                      setDraftContent(normalizeNodeContentHtml(node.content ?? ""));
                       setSaveError(null);
                     }}
                     disabled={isSaving}
@@ -227,10 +246,9 @@ export function NodeDetailModal({
               <ul className="space-y-2">
                 {connectedEdges.map((edge: NodeDetailModalEdge) => {
                   const other = getOtherNode(edge);
+                  const plain = other ? stripHtml(other.content) : "";
                   const label = other
-                    ? (other.content.length > 50
-                        ? `${other.content.slice(0, 50)}…`
-                        : other.content)
+                    ? (plain.length > 50 ? `${plain.slice(0, 50)}…` : plain) || "（空）"
                     : "（不明）";
                   return (
                     <li

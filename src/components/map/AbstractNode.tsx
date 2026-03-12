@@ -1,6 +1,7 @@
 "use client";
 
 import { Handle, Position, useStore, type NodeProps } from "reactflow";
+import { stripHtml } from "@/lib/html";
 
 export type AbstractNodeData = {
   content: string;
@@ -22,7 +23,7 @@ export function AbstractNode({ data }: NodeProps<AbstractNodeData>) {
         className={`${handleBase} ${isConnecting ? "!opacity-100" : ""}`}
       />
       <p className="text-stone-800 text-sm leading-relaxed whitespace-pre-wrap">
-        {data.content}
+        {stripHtml(data.content)}
       </p>
       <Handle
         type="source"

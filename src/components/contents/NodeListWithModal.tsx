@@ -6,6 +6,7 @@ import type { MindMapNode } from "@/components/map/MindMap";
 import type { NodeDetailModalEdge } from "@/components/map/NodeDetailModal";
 import { NodeDetailModal } from "@/components/map/NodeDetailModal";
 import { deleteEdge, deleteNode } from "@/app/contents/actions";
+import { stripHtml } from "@/lib/html";
 
 type NodeListWithModalProps = {
   nodes: MindMapNode[];
@@ -82,7 +83,7 @@ export function NodeListWithModal({ nodes, edges }: NodeListWithModalProps) {
         {hierarchy.map((block) => (
           <div key={block.essence.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
             <button type="button" onClick={openNode(block.essence.id)} className="w-full text-left p-4 pl-5 border-l-4 border-primary bg-section/50 hover:bg-section transition-colors">
-              <p className="font-bold text-stone-900 whitespace-pre-wrap">{block.essence.content}</p>
+              <p className="font-bold text-stone-900 whitespace-pre-wrap">{stripHtml(block.essence.content)}</p>
               <div className="mt-2 h-px bg-stone-200" aria-hidden />
             </button>
             {block.children.length > 0 && (
@@ -92,7 +93,7 @@ export function NodeListWithModal({ nodes, edges }: NodeListWithModalProps) {
                     <div className="absolute left-8 top-0 bottom-0 w-px bg-stone-200" aria-hidden />
                     <div className="absolute left-8 top-4 h-px w-4 bg-stone-200" aria-hidden />
                     <button type="button" onClick={openNode(child.id)} className="ml-8 flex-1 text-left py-3 pr-4 pl-2 hover:bg-stone-50/80 transition-colors min-w-0">
-                      <p className="text-stone-600 text-sm whitespace-pre-wrap line-clamp-3">{child.content}</p>
+                      <p className="text-stone-600 text-sm whitespace-pre-wrap line-clamp-3">{stripHtml(child.content)}</p>
                     </button>
                   </div>
                 ))}
@@ -103,7 +104,7 @@ export function NodeListWithModal({ nodes, edges }: NodeListWithModalProps) {
         {rootNotes.map((node) => (
           <div key={node.id}>
             <button type="button" onClick={openNode(node.id)} className="w-full text-left p-4 rounded-2xl border border-stone-200 bg-section hover:border-primary/30 hover:bg-white transition-colors">
-              <p className="text-stone-800 whitespace-pre-wrap line-clamp-3 text-sm">{node.content}</p>
+              <p className="text-stone-800 whitespace-pre-wrap line-clamp-3 text-sm">{stripHtml(node.content)}</p>
             </button>
           </div>
         ))}

@@ -2,6 +2,7 @@
 
 import { Handle, Position, type NodeProps } from "reactflow";
 import { Lightbulb } from "lucide-react";
+import { stripHtml } from "@/lib/html";
 
 export type DetailNodeData = {
   content: string;
@@ -37,7 +38,7 @@ export function DetailNode({ data }: NodeProps<DetailNodeData>) {
           </span>
         )}
         <p className="text-stone-800 text-sm leading-relaxed whitespace-pre-wrap line-clamp-4 flex-1 min-w-0 text-left">
-          {data.content}
+          {stripHtml(data.content)}
         </p>
       </div>
     </div>
